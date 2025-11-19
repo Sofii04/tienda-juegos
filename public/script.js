@@ -1,510 +1,309 @@
-// Commit 3: Barra de búsqueda y API de CheapShark
-
-// =============================
-// CONFIGURACIÓN DE LA API
-// =============================
+// =====================================
+// CONFIGURACIÓN API
+// =====================================
 const API_BASE = "https://www.cheapshark.com/api/1.0";
+
+// Endpoints base
 const DEALS_URL = `${API_BASE}/deals`;
-const GAMES_URL = `${API_BASE}/games`;
-const STORES_URL = `${API_BASE}/stores`;
+const SEARCH_URL = `${API_BASE}/games?title=`;
+const DEAL_DETAIL_URL = `${API_BASE}/deals?id=`;
 
-// =============================
-// REFERENCIAS AL DOM
-// =============================
-// Commit 4: Render del grid dinámico de videojuegos
-
+// =====================================
+// REFERENCIAS DEL DOM
+// =====================================
 const gamesGrid = document.getElementById("gamesGrid");
 const searchInput = document.getElementById("searchInput");
-const searchButton = document.getElementById("searchButton");
+const searchBtn = document.getElementById("searchBtn");
+const sortSelect = document.getElementById("sortSelect");
 const storeFilter = document.getElementById("storeFilter");
-const sortPrice = document.getElementById("sortPrice");
-const loadMoreButton = document.getElementById("loadMoreButton");
+const verMasBtn = document.getElementById("verMas");
 
+// ===============================
+// FILTRO POR TIENDA
+// ===============================
+storeFilter.addEventListener("change", () => {
+  const storeId = storeFilter.value;
+
+  if (storeId === "") {
+      // Todas las tiendas
+      pagina = 0;
+      loadDeals();
+      return;
+  }
+
+  pagina = 0;
+  loadDealsFiltered(storeId);
+});
+
+
+// Spinner y mensajes
 const spinner = document.getElementById("spinner");
 const loadingText = document.getElementById("loadingText");
 const errorText = document.getElementById("errorText");
 const emptyMessage = document.getElementById("emptyMessage");
 
-// Commit 5: Modal de detalle, filtros y sistema loading/error
-
+// Modal
 const detailModal = document.getElementById("detailModal");
-const closeModalButton = document.getElementById("closeModalButton");
-const modalContent = document.getElementById("modalContent");
+const closeModal = document.getElementById("closeModal");
+const modalImg = document.getElementById("modalImg");
+const modalTitle = document.getElementById("modalTitle");
+const modalPrice = document.getElementById("modalPrice");
+const modalNormalPrice = document.getElementById("modalNormalPrice");
+const modalLink = document.getElementById("modalLink");
 
-// =============================
-// ESTADO GLOBAL
-// =============================
-let allGames = [];            // Juegos cargados actualmente
-let currentPage = 0;          // Página actual de /deals
-const PAGE_SIZE = 12;         // Mínimo 12 resultados
-let currentMode = "deals";    // "deals" (explorar) o "search" (búsqueda)
-let lastSearchTerm = "";      // Último término buscado
-let storesMap = {};           // storeID -> storeName
+// Estado
+let pagina = 0;
+let modoBusqueda = false;
+let textoBuscado = "";
 
-// =============================
-// FUNCIONES DE UI
-// =============================
+// =====================================
+// MANEJO DE ESTADOS (loading, error, empty)
+// =====================================
 function setLoading(isLoading) {
   if (isLoading) {
     spinner.classList.remove("hidden");
     loadingText.classList.remove("hidden");
+    errorText.classList.add("hidden");
+    emptyMessage.classList.add("hidden");
   } else {
     spinner.classList.add("hidden");
     loadingText.classList.add("hidden");
   }
 }
 
-function setError(message = "") {
-  if (message) {
-    errorText.textContent = message;
-    errorText.classList.remove("hidden");
-  } else {
-    errorText.classList.add("hidden");
-  }
+function showError(message) {
+  errorText.textContent = message;
+  errorText.classList.remove("hidden");
 }
 
-function showEmptyMessage(show) {
-  if (show) {
-    emptyMessage.classList.remove("hidden");
-  } else {
-    emptyMessage.classList.add("hidden");
-  }
+function showEmpty(message = "No se encontraron resultados.") {
+  emptyMessage.textContent = message;
+  emptyMessage.classList.remove("hidden");
 }
 
-// =============================
-// LLAMADAS A LA API
-// =============================
-
-// Cargar lista de tiendas para el select
-async function loadStores() {
-  try {
-    const res = await fetch(STORES_URL);
-    const stores = await res.json();
-    storesMap = {};
-
-    stores.forEach((store) => {
-      storesMap[store.storeID] = store.storeName;
-
-      const option = document.createElement("option");
-      option.value = store.storeID;
-      option.textContent = store.storeName;
-      storeFilter.appendChild(option);
-    });
-  } catch (error) {
-    console.error("Error cargando tiendas:", error);
-    // Si falla, solo se pierde el nombre de la tienda, no es crítico
-  }
-}
-
-// Cargar ofertas usando /deals (modo exploración)
-async function loadDealsPage(reset = false) {
-  setError("");
-  setLoading(true);
-
-  try {
-    if (reset) {
-      currentPage = 0;
-    }
-
-    const params = new URLSearchParams({
-      pageNumber: currentPage.toString(),
-      pageSize: PAGE_SIZE.toString(),
-    });
-
-    // Filtro de tienda si está seleccionado
-    if (storeFilter.value !== "all") {
-      params.append("storeID", storeFilter.value);
-    }
-
-    const url = `${DEALS_URL}?${params.toString()}`;
-    const res = await fetch(url);
-
-    if (!res.ok) {
-      throw new Error("La API devolvió un error");
-    }
-
-    const deals = await res.json();
-
-    const mappedGames = deals.map((deal) => ({
-      id: deal.dealID,
-      title: deal.title,
-      thumb: deal.thumb,
-      normalPrice: parseFloat(deal.normalPrice),
-      salePrice: parseFloat(deal.salePrice),
-      savings: parseFloat(deal.savings),
-      storeID: deal.storeID,
-      dealLink: `https://www.cheapshark.com/redirect?dealID=${deal.dealID}`,
-    }));
-
-    if (reset) {
-      allGames = mappedGames;
-    } else {
-      allGames = [...allGames, ...mappedGames];
-    }
-
-    currentMode = "deals";
-    currentPage += 1;
-
-    applyFiltersAndRender();
-  } catch (error) {
-    console.error(error);
-    setError("No se pudieron cargar las ofertas. Intenta de nuevo.");
-  } finally {
-    setLoading(false);
-  }
-}
-
-// Búsqueda por nombre usando /games
-async function searchGamesByName(term) {
-  setError("");
-  setLoading(true);
-  lastSearchTerm = term;
-  currentMode = "search";
-
-  try {
-    const params = new URLSearchParams({
-      title: term,
-      pageSize: "20",
-    });
-
-    const url = `${GAMES_URL}?${params.toString()}`;
-    const res = await fetch(url);
-
-    if (!res.ok) {
-      throw new Error("La API de búsqueda devolvió un error");
-    }
-
-    const gamesResponse = await res.json();
-    const topGames = gamesResponse.slice(0, PAGE_SIZE);
-
-    const detailedGames = await Promise.all(
-      topGames.map(async (game) => {
-        try {
-          if (!game.cheapestDealID) {
-            return {
-              id: game.gameID,
-              title: game.external,
-              thumb: game.thumb,
-              normalPrice: null,
-              salePrice: parseFloat(game.cheapest || 0),
-              savings: null,
-              storeID: null,
-              dealLink: "",
-            };
-          }
-
-          const dealRes = await fetch(
-            `${DEALS_URL}?id=${game.cheapestDealID}`
-          );
-          const dealData = await dealRes.json();
-
-          const deal =
-            dealData[game.cheapestDealID] && dealData[game.cheapestDealID].gameInfo
-              ? dealData[game.cheapestDealID].gameInfo
-              : dealData.gameInfo || dealData;
-
-          const salePrice = parseFloat(deal.salePrice || game.cheapest || 0);
-          const normalPrice = parseFloat(
-            deal.retailPrice || deal.normalPrice || salePrice
-          );
-
-          const savings =
-            normalPrice && normalPrice > 0
-              ? ((normalPrice - salePrice) / normalPrice) * 100
-              : null;
-
-          return {
-            id: game.gameID,
-            title: game.external,
-            thumb: game.thumb,
-            normalPrice,
-            salePrice,
-            savings,
-            storeID: deal.storeID || null,
-            dealLink: `https://www.cheapshark.com/redirect?dealID=${game.cheapestDealID}`,
-          };
-        } catch (error) {
-          console.error("Error cargando detalle de juego:", error);
-          return {
-            id: game.gameID,
-            title: game.external,
-            thumb: game.thumb,
-            normalPrice: null,
-            salePrice: parseFloat(game.cheapest || 0),
-            savings: null,
-            storeID: null,
-            dealLink: "",
-          };
-        }
-      })
-    );
-
-    allGames = detailedGames;
-    applyFiltersAndRender();
-  } catch (error) {
-    console.error(error);
-    setError("No se pudieron buscar los videojuegos. Intenta de nuevo.");
-  } finally {
-    setLoading(false);
-  }
-}
-
-// =============================
-// FILTROS Y ORDENAMIENTO
-// =============================
-function applyFiltersAndRender() {
-  let games = [...allGames];
-
-  const selectedStore = storeFilter.value;
-  if (selectedStore !== "all") {
-    games = games.filter((g) => g.storeID === selectedStore);
-  }
-
-  switch (sortPrice.value) {
-    case "saleAsc":
-      games.sort((a, b) => (a.salePrice || 0) - (b.salePrice || 0));
-      break;
-    case "saleDesc":
-      games.sort((a, b) => (b.salePrice || 0) - (a.salePrice || 0));
-      break;
-    case "normalAsc":
-      games.sort((a, b) => (a.normalPrice || 0) - (b.normalPrice || 0));
-      break;
-    case "normalDesc":
-      games.sort((a, b) => (b.normalPrice || 0) - (a.normalPrice || 0));
-      break;
-    default:
-      break;
-  }
-
-  renderGames(games);
-}
-
-// =============================
-// RENDER DEL GRID
-// =============================
-function renderGames(games) {
-  gamesGrid.innerHTML = "";
-
-  if (!games.length) {
-    showEmptyMessage(true);
-    return;
-  }
-
-  showEmptyMessage(false);
-
-  games.forEach((game) => {
-    const card = document.createElement("article");
+// =====================================
+// RENDER DE TARJETAS
+// =====================================
+function renderGames(list) {
+  list.forEach(game => {
+    const card = document.createElement("div");
     card.className =
-      "flex flex-col overflow-hidden rounded-xl border border-slate-800 bg-slate-900/80 shadow hover:shadow-lg transition hover:-translate-y-1";
+      "bg-slate-900 p-3 rounded shadow hover:scale-105 transition border border-slate-800";
 
-    const discountText =
-      game.savings != null ? `-${Math.round(game.savings)}%` : "Oferta";
-
-    const storeName =
-      game.storeID && storesMap[game.storeID]
-        ? storesMap[game.storeID]
-        : "Tienda";
+    const price = game.salePrice || game.cheapest || "0.00";
+    const img = game.thumb || game.image;
 
     card.innerHTML = `
-      <div class="relative aspect-video w-full bg-slate-800">
-        ${
-          game.thumb
-            ? `<img src="${game.thumb}" alt="${game.title}" class="h-full w-full object-cover" />`
-            : `<div class="flex h-full w-full items-center justify-center text-xs text-slate-400">
-                Sin imagen
-               </div>`
-        }
-        <span class="absolute left-2 top-2 rounded-full bg-cyan-500 px-2 py-1 text-[0.65rem] font-bold text-slate-950">
-          ${discountText}
-        </span>
-      </div>
+      <img src="${img}" class="rounded mb-2 w-full h-40 object-cover" />
 
-      <div class="flex flex-1 flex-col gap-2 p-3 text-sm">
-        <h2 class="line-clamp-2 text-xs font-semibold text-slate-100">
-          ${game.title}
-        </h2>
+      <h3 class="font-bold mb-1 text-sm">${game.title}</h3>
 
-        <p class="text-[0.7rem] text-slate-400">
-          ${storeName}
-        </p>
+      <p class="text-cyan-400 font-semibold">$${price}</p>
 
-        <div class="mt-1 flex items-baseline gap-2">
-          ${
-            game.normalPrice != null
-              ? `<span class="text-[0.75rem] text-slate-500 line-through">$${game.normalPrice.toFixed(
-                  2
-                )}</span>`
-              : ""
-          }
-          ${
-            game.salePrice != null
-              ? `<span class="text-base font-bold text-emerald-400">$${game.salePrice.toFixed(
-                  2
-                )}</span>`
-              : `<span class="text-sm text-slate-300">Precio no disponible</span>`
-          }
-        </div>
-
-        <button
-          class="mt-auto w-full rounded-lg bg-cyan-500 px-3 py-2 text-xs font-semibold text-slate-950 transition hover:bg-cyan-400 active:scale-95 ver-detalle-btn"
-          data-game-id="${game.id}"
-        >
-          Ver detalle
-        </button>
-      </div>
+      <button
+        data-id="${game.dealID || game.gameID}"
+        class="bg-cyan-500 hover:bg-cyan-600 text-white mt-2 w-full py-1 rounded text-sm"
+      >
+        Ver detalle
+      </button>
     `;
 
     gamesGrid.appendChild(card);
   });
 
-  const detailButtons = gamesGrid.querySelectorAll(".ver-detalle-btn");
-  detailButtons.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const gameId = btn.getAttribute("data-game-id");
-      const game = allGames.find((g) => g.id === gameId || g.gameID === gameId);
-      if (game) {
-        openDetailModal(game);
-      }
+  activarModalBotones();
+}
+
+// =====================================
+// BOTONES → MODAL DETALLE
+// =====================================
+function activarModalBotones() {
+  const botones = document.querySelectorAll("[data-id]");
+  botones.forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const id = btn.dataset.id;
+      await abrirModal(id);
     });
   });
 }
 
-// =============================
-// MODAL DE DETALLE
-// =============================
-function openDetailModal(game) {
-  const storeName =
-    game.storeID && storesMap[game.storeID]
-      ? storesMap[game.storeID]
-      : "Tienda";
+async function abrirModal(dealID) {
+  try {
+    const res = await fetch(`${DEAL_DETAIL_URL}${dealID}`);
+    const data = await res.json();
 
-  modalContent.innerHTML = `
-    <div class="flex flex-col gap-4">
-      <div class="flex flex-col gap-3 sm:flex-row">
-        <div class="aspect-video w-full max-w-xs overflow-hidden rounded-lg bg-slate-800">
-          ${
-            game.thumb
-              ? `<img src="${game.thumb}" alt="${game.title}" class="h-full w-full object-cover" />`
-              : `<div class="flex h-full w-full items-center justify-center text-xs text-slate-400">
-                  Sin imagen
-                 </div>`
-          }
-        </div>
-        <div class="flex-1 space-y-2 text-sm">
-          <h2 class="text-lg font-semibold text-cyan-300">${game.title}</h2>
-          <p class="text-xs text-slate-400">
-            Tienda: <span class="font-medium text-slate-200">${storeName}</span>
-          </p>
-          <p class="text-xs text-slate-400">
-            Precio normal:
-            ${
-              game.normalPrice != null
-                ? `<span class="font-semibold text-slate-200">$${game.normalPrice.toFixed(
-                    2
-                  )}</span>`
-                : `<span class="text-slate-500">No disponible</span>`
-            }
-          </p>
-          <p class="text-xs text-slate-400">
-            Precio oferta:
-            ${
-              game.salePrice != null
-                ? `<span class="font-semibold text-emerald-400">$${game.salePrice.toFixed(
-                    2
-                  )}</span>`
-                : `<span class="text-slate-500">No disponible</span>`
-            }
-          </p>
-          <p class="text-xs text-slate-400">
-            Descuento:
-            ${
-              game.savings != null
-                ? `<span class="font-semibold text-emerald-300">${Math.round(
-                    game.savings
-                  )}% OFF</span>`
-                : `<span class="text-slate-500">No disponible</span>`
-            }
-          </p>
-        </div>
-      </div>
+    const game = data.gameInfo;
 
-      ${
-        game.dealLink
-          ? `<a
-              href="${game.dealLink}"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="inline-flex items-center justify-center rounded-lg bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-emerald-400"
-            >
-              Ir a la oferta en la tienda
-            </a>`
-          : `<p class="text-xs text-slate-500">
-              No hay un enlace directo a la tienda disponible.
-             </p>`
-      }
-    </div>
-  `;
+    modalImg.src = game.thumb;
+    modalTitle.textContent = game.name;
+    modalPrice.textContent = `Precio oferta: $${game.salePrice}`;
+    modalNormalPrice.textContent = `Precio normal: $${game.retailPrice}`;
+    modalLink.href = game.storeLink;
 
-  detailModal.classList.remove("hidden");
-  detailModal.classList.add("flex");
+    detailModal.classList.remove("hidden");
+  } catch (err) {
+    showError("No se pudo cargar el detalle del juego.");
+  }
 }
 
-function closeDetailModal() {
+closeModal.addEventListener("click", () => {
   detailModal.classList.add("hidden");
-  detailModal.classList.remove("flex");
+});
+
+// =====================================
+// CARGA INICIAL + PAGINACIÓN "VER MÁS"
+// =====================================
+async function cargarOfertas(p = 0) {
+  try {
+    setLoading(true);
+    gamesGrid.innerHTML = "";
+    errorText.classList.add("hidden");
+    emptyMessage.classList.add("hidden");
+
+    const url = `${DEALS_URL}?pageNumber=${p}&pageSize=12`;
+
+    const res = await fetch(url);
+    const data = await res.json();
+
+    setLoading(false);
+
+    if (!data || data.length === 0) {
+      showEmpty();
+      return;
+    }
+
+    renderGames(data);
+    verMasBtn.classList.remove("hidden");
+  } catch (err) {
+    setLoading(false);
+    showError("Error cargando ofertas.");
+  }
 }
 
-// =============================
-// EVENTOS
-// =============================
-searchButton.addEventListener("click", () => {
-  const term = searchInput.value.trim();
-  if (!term) return;
-  searchGamesByName(term);
+verMasBtn.addEventListener("click", () => {
+  pagina++;
+  cargarOfertas(pagina);
 });
 
-searchInput.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") {
-    const term = searchInput.value.trim();
-    if (!term) return;
-    searchGamesByName(term);
+// =====================================
+// BÚSQUEDA DE JUEGOS
+// =====================================
+async function buscarJuegos() {
+  textoBuscado = searchInput.value.trim();
+  modoBusqueda = true;
+
+  if (textoBuscado === "") {
+    modoBusqueda = false;
+    pagina = 0;
+    cargarOfertas(0);
+    return;
   }
-});
 
-storeFilter.addEventListener("change", () => {
-  applyFiltersAndRender();
-});
+  try {
+    setLoading(true);
+    gamesGrid.innerHTML = "";
+    verMasBtn.classList.add("hidden");
 
-sortPrice.addEventListener("change", () => {
-  applyFiltersAndRender();
-});
+    const res = await fetch(`${SEARCH_URL}${textoBuscado}&limit=20`);
+    const data = await res.json();
 
-loadMoreButton.addEventListener("click", () => {
-  if (currentMode === "deals") {
-    loadDealsPage(false);
-  } else if (currentMode === "search" && lastSearchTerm) {
-    // Para el examen basta con paginar en modo deals
-    loadDealsPage(false);
-    currentMode = "deals";
+    setLoading(false);
+
+    if (!data || data.length === 0) {
+      showEmpty();
+      return;
+    }
+
+    renderGames(data);
+  } catch (err) {
+    setLoading(false);
+    showError("Error al buscar videojuegos.");
   }
-});
-
-closeModalButton.addEventListener("click", closeDetailModal);
-detailModal.addEventListener("click", (e) => {
-  if (e.target === detailModal) {
-    closeDetailModal();
-  }
-});
-
-// =============================
-// INICIALIZACIÓN
-// =============================
-async function init() {
-  await loadStores();        // Cargar nombres de tiendas
-  await loadDealsPage(true); // Cargar primera página de ofertas
 }
 
-document.addEventListener("DOMContentLoaded", init);
+async function loadDealsFiltered(storeId) {
+  showLoading();
+  hideError();
 
+  try {
+      const url = `${API_BASE}/deals?storeID=${storeId}&pageSize=20`;
+      const response = await fetch(url);
+
+      if (!response.ok) throw new Error("Error al obtener datos");
+
+      const data = await response.json();
+      renderGames(data);
+
+      hideLoading();
+
+      if (data.length === 0) {
+          showError("No hay juegos disponibles en esta tienda");
+      }
+  } catch (error) {
+      showError("No se pudo cargar la información");
+  }
+}
+
+// Eventos búsqueda
+searchBtn.addEventListener("click", buscarJuegos);
+searchInput.addEventListener("keyup", e => {
+  if (e.key === "Enter") buscarJuegos();
+});
+
+// =====================================
+// ORDENAR POR PRECIO
+// =====================================
+sortSelect.addEventListener("change", () => {
+  let cards = [...gamesGrid.children];
+
+  cards.sort((a, b) => {
+    const pA = parseFloat(a.querySelector("p").textContent.replace("$", ""));
+    const pB = parseFloat(b.querySelector("p").textContent.replace("$", ""));
+
+    if (sortSelect.value === "priceAsc") return pA - pB;
+    if (sortSelect.value === "priceDesc") return pB - pA;
+    return 0;
+  });
+
+  gamesGrid.innerHTML = "";
+  cards.forEach(c => gamesGrid.appendChild(c));
+});
+
+// =====================================
+// FILTRO POR TIENDA
+// =====================================
+storeFilter.addEventListener("change", async () => {
+  const tienda = storeFilter.value;
+  pagina = 0;
+
+  try {
+    setLoading(true);
+    gamesGrid.innerHTML = "";
+
+    const url = tienda
+      ? `${DEALS_URL}?storeID=${tienda}&pageSize=20`
+      : `${DEALS_URL}?pageSize=20`;
+
+    const res = await fetch(url);
+    const data = await res.json();
+
+    setLoading(false);
+
+    if (!data || data.length === 0) {
+      showEmpty();
+      return;
+    }
+
+    renderGames(data);
+    verMasBtn.classList.add("hidden"); // desactivar ver más en filtros
+  } catch {
+    setLoading(false);
+    showError("Error al filtrar por tienda.");
+  }
+});
+
+// =====================================
+// EJECUCIÓN INICIAL
+// =====================================
+cargarOfertas(0);
 

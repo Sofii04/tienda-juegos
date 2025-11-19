@@ -11,6 +11,8 @@ const STORES_URL = `${API_BASE}/stores`;
 // =============================
 // REFERENCIAS AL DOM
 // =============================
+// Commit 4: Render del grid dinámico de videojuegos
+
 const gamesGrid = document.getElementById("gamesGrid");
 const searchInput = document.getElementById("searchInput");
 const searchButton = document.getElementById("searchButton");

@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+
+    <title>Shark Games Store</title>
+
+    <!-- CSS generado por Tailwind -->
+    <link rel="stylesheet" href="./output.css" />
+  </head>
+  <body class="min-h-screen bg-slate-950 text-slate-100">
+    <!-- Contenedor general -->
+    <div class="mx-auto flex min-h-screen max-w-6xl flex-col gap-6 px-4 pb-10 pt-6">
+
+      <!-- HEADER -->
+      <header class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 class="text-3xl font-bold tracking-tight text-cyan-400">
+            Shark Games Store
+          </h1>
+          <p class="text-sm text-slate-300">
+            Encuentra las mejores ofertas de videojuegos en diferentes tiendas digitales.
+          </p>
+        </div>
+
+        <!-- Indicadores de carga / error -->
+        <div class="flex items-center gap-3">
+          <!-- Spinner -->
+          <div
+            id="spinner"
+            class="hidden h-6 w-6 animate-spin rounded-full border-4 border-cyan-400 border-t-transparent"
+          ></div>
+          <!-- Texto cargando -->
+          <span id="loadingText" class="hidden text-sm text-cyan-300">
+            Cargando...
+          </span>
+          <!-- Texto error -->
+          <span id="errorText" class="hidden text-sm text-red-400">
+            Error al cargar los datos.
+          </span>
+        </div>
+      </header>
+
+      <!-- BARRA DE BÚSQUEDA + FILTROS -->
+      <section class="flex flex-col gap-3 rounded-xl bg-slate-900/70 p-4 shadow-lg">
+        <div class="flex flex-col gap-3 md:flex-row md:items-center">
+          <label class="text-sm font-semibold text-slate-200" for="searchInput">
+            Buscar videojuego por nombre
+          </label>
+          <div class="flex flex-1 flex-col gap-2 sm:flex-row">
+            <input
+              id="searchInput"
+              type="text"
+              placeholder="Ej: Batman, Portal..."
+              class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-400"
+            />
+            <button
+              id="searchButton"
+              class="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400 active:scale-95"
+            >
+              Buscar
+            </button>
+          </div>
+        </div>
+
+        <!-- Controles inferiores -->
+        <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <!-- Filtro por tienda y orden -->
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <!-- Filtrar por tienda -->
+            <div class="flex items-center gap-2">
+              <label for="storeFilter" class="text-xs font-medium text-slate-300">
+                Tienda:
+              </label>
+              <select
+                id="storeFilter"
+                class="min-w-[160px] rounded-lg border border-slate-700 bg-slate-900 px-2 py-2 text-xs text-slate-100 focus:outline-none focus:ring-2 focus:ring-cyan-400"
+              >
+                <option value="all">Todas las tiendas</option>
+                <!-- Opciones se agregan con JS -->
+              </select>
+            </div>
+
+            <!-- Ordenar por precio -->
+            <div class="flex items-center gap-2">
+              <label for="sortPrice" class="text-xs font-medium text-slate-300">
+                Ordenar por:
+              </label>
+              <select
+                id="sortPrice"
+                class="min-w-[180px] rounded-lg border border-slate-700 bg-slate-900 px-2 py-2 text-xs text-slate-100 focus:outline-none focus:ring-2 focus:ring-cyan-400"
+              >
+                <option value="none">Sin orden</option>
+                <option value="saleAsc">Precio oferta (↑)</option>
+                <option value="saleDesc">Precio oferta (↓)</option>
+                <option value="normalAsc">Precio normal (↑)</option>
+                <option value="normalDesc">Precio normal (↓)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Botón Ver más (paginación) -->
+          <button
+            id="loadMoreButton"
+            class="mt-1 inline-flex items-center justify-center rounded-lg border border-cyan-500 px-4 py-2 text-xs font-semibold text-cyan-300 transition hover:bg-cyan-500/10 active:scale-95"
+          >
+            Ver más ofertas
+          </button>
+        </div>
+      </section>
+
+      <!-- GRID DE JUEGOS -->
+      <main class="flex-1">
+        <!-- Mensaje vacío -->
+        <p
+          id="emptyMessage"
+          class="hidden rounded-lg border border-dashed border-slate-700 bg-slate-900/60 p-4 text-center text-sm text-slate-400"
+        >
+          No se encontraron videojuegos con los filtros actuales.
+        </p>
+
+        <!-- Grid -->
+        <div
+          id="gamesGrid"
+          class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+        >
+          <!-- Las tarjetas se generan con JavaScript -->
+        </div>
+      </main>
+    </div>
+
+    <!-- MODAL DE DETALLE -->
+    <div
+      id="detailModal"
+      class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 px-4"
+    >
+      <div class="relative w-full max-w-lg rounded-2xl bg-slate-900 p-5 shadow-2xl">
+        <button
+          id="closeModalButton"
+          class="absolute right-3 top-3 rounded-full bg-slate-800 px-2 py-1 text-xs text-slate-300 hover:bg-slate-700"
+        >
+          X
+        </button>
+
+        <div id="modalContent" class="flex flex-col gap-4">
+          <!-- Contenido del detalle generado con JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Script principal -->
+    <script src="./script.js"></script>
+  </body>
+</html>
+

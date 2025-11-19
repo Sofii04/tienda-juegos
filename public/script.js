@@ -25,6 +25,8 @@ const loadingText = document.getElementById("loadingText");
 const errorText = document.getElementById("errorText");
 const emptyMessage = document.getElementById("emptyMessage");
 
+// Commit 5: Modal de detalle, filtros y sistema loading/error
+
 const detailModal = document.getElementById("detailModal");
 const closeModalButton = document.getElementById("closeModalButton");
 const modalContent = document.getElementById("modalContent");
